@@ -3,30 +3,25 @@ from collections.abc import Generator
 import pytest
 import redis
 from fastapi.testclient import TestClient
-from sqlmodel import Session, delete, select
+from sqlmodel import Session
 
 from app.core.config import settings
 from app.core.db import engine, init_db
 from app.core.storage import storage
 from app.main import app
-from app.models import File, Item, User
+from tests.utils.cleanup import delete_created_records, track_created_records
 from tests.utils.user import authentication_token_from_email
 from tests.utils.utils import get_superuser_token_headers
 
 
 @pytest.fixture(scope="session", autouse=True)
 def db() -> Generator[Session]:
-    with Session(engine) as session:
+    # Only the records created during this run are deleted at the end, so the
+    # tests can run against a database that already holds other data.
+    with track_created_records() as created, Session(engine) as session:
         init_db(session)
         yield session
-        # Objects first: the file rows are removed by the user cascade below
-        if storage is not None:
-            storage.delete_many(session.exec(select(File.s3_key)).all())
-        statement = delete(Item)
-        session.execute(statement)
-        statement = delete(User)
-        session.execute(statement)
-        session.commit()
+        delete_created_records(session, created, storage)
 
 
 @pytest.fixture(scope="module")

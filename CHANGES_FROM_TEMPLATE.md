@@ -48,6 +48,12 @@ Declared change of the reference application: endpoints to upload, list, downloa
 | S7 | `compose.yml`: `motoserver/moto:5.2.5` (S3 emulator, host port 5050 because 5000 is often taken on macOS) and a one-shot `s3-init` (`amazon/aws-cli:2.39.3`) that creates the bucket; the backend waits for it and gets fake credentials (`test`/`test`) for the emulator. | Local emulation without AWS resources or credentials. |
 | S8 | Tests `tests/api/routes/test_files.py`: round trip with byte comparison and a non-ASCII name, size limit (at and above), listing visibility, 403/404, user deletion (admin and self) removes objects, 502 with no metadata when storage is unreachable, 503 when not configured. `tests/conftest.py` deletes the objects of remaining files in its final cleanup. | Coverage of the new module against the emulator, without residual data in the bucket. |
 
+## Test cleanup
+
+| # | Change | Reason |
+|---|--------|--------|
+| T1 | `tests/conftest.py` + new `tests/utils/cleanup.py`: upstream's session fixture deleted **all** items and users at the end of the run (and S8 extended it to all file objects). Now a SQLAlchemy `after_flush` listener records the ids of every `User`, `Item` and `File` inserted during the run (by the app through `TestClient` or by test helpers), and the final cleanup deletes only those: S3 objects first, then file rows, items and users. Verified by seeding a user with an item and a file plus a superuser item, running the suite twice, and checking that counts and seeded rows/objects were unchanged. | Running Pytest against a database that holds other data (e.g. a shared, fixed environment) must not destroy that data, and the suite must not depend on an empty database. Known remaining effects on pre-existing data: the superuser password is changed and restored by `test_update_password_me`, and if `EMAIL_TEST_USER` already exists its password is reset by the `normal_user_token_headers` fixture (both are upstream behavior). |
+
 ## Removed from upstream (not copied)
 
 | Path | Reason |
