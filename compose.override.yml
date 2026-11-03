@@ -1,0 +1,21 @@
+# Development conveniences, loaded automatically by `docker compose`.
+services:
+  backend:
+    command:
+      - fastapi
+      - dev
+      - --host
+      - "0.0.0.0"
+    develop:
+      watch:
+        - path: ./app
+          action: sync
+          target: /app/app
+        - path: ./pyproject.toml
+          action: rebuild
+        - path: ./uv.lock
+          action: rebuild
+    volumes:
+      # Tests are not part of the image; mount them to run Pytest in the container
+      - ./tests:/app/tests:ro
+      - ./htmlcov:/app/htmlcov
