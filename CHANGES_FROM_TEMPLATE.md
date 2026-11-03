@@ -19,6 +19,20 @@ Paths on the left are upstream paths; on the right, paths in this repository.
 | B10 | Committed `.env` → `.env.example` (same values, plus explicit `FRONTEND_HOST`); `.env` added to `.gitignore` and `.dockerignore`; `.git` and `openapi.json` added to `.dockerignore`. | Never commit environment files; keep the image independent from local files. |
 | B11 | `README.md` replaced. | Instructions for this repository only. |
 
+## Module: Redis cache (stage 3)
+
+Declared change of the reference application: a cache-aside Redis cache for item reads.
+
+| # | Change | Reason |
+|---|--------|--------|
+| C1 | Dependency `redis>=8.1.0,<9.0.0` (redis-py 8.1.0 locked, no transitive dependencies). | Redis client (works with ElastiCache, `rediss://` for TLS). |
+| C2 | Settings `REDIS_URL` (optional; without it the cache is disabled), `CACHE_TTL_SECONDS` (60) and `CACHE_KEY_PREFIX` (`tesis`). | Same image for every environment; the prefix lets several environments share a cluster without key collisions. |
+| C3 | `app/core/cache.py`: JSON cache with one *epoch* counter per namespace inside every key; invalidation = `INCR` of the epoch. Fail-open: any Redis error is logged and the request is served from the database. 0.5 s socket timeouts. | Cache-aside without pattern deletes; safe against concurrent readers storing values computed before a write. Fail-open keeps the cache from being a single point of failure. |
+| C4 | `app/core/cache_invalidation.py`, registered in `app/main.py`: SQLAlchemy session listeners mark the `items` namespace when a flush or a bulk statement touches `Item` (or deletes a `User`) and invalidate it **after commit** (discarded on rollback). | Covers every write path, including `crud` helpers, ORM cascades and the bulk `DELETE` used when deleting a user, without touching the write routes. |
+| C5 | `app/api/routes/items.py`: `GET /items/` and `GET /items/{id}` read through the cache (`CacheDep` in `app/api/deps.py`) and return the header `X-Cache: HIT \| MISS \| BYPASS`. Permission checks run on every request, also for cached items; 404s are not cached. Write routes are unchanged. Response bodies are unchanged. | Makes the cache behavior observable (tests and the experiment) without reading Redis internals. |
+| C6 | `compose.yml`: `redis:7.2-alpine` service with healthcheck; backend waits for it. `.env.example` documents the new settings. | Local emulation, closest to ElastiCache Redis OSS 7.x. |
+| C7 | Tests: `tests/core/test_cache.py` (disabled, unreachable/fail-open, hit + invalidation, TTL) and `tests/api/routes/test_items_cache.py` (MISS→HIT, invalidation on update, delete, create and owner deletion, permissions on cached items, BYPASS when Redis is unavailable). `tests/conftest.py` gains a `redis_client` fixture. Tests use random ids and their own key prefixes; no `FLUSHALL`. | Coverage of the new module against a real Redis, without dependence on residual data. |
+
 ## Removed from upstream (not copied)
 
 | Path | Reason |

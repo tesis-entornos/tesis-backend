@@ -1,6 +1,7 @@
 from collections.abc import Generator
 
 import pytest
+import redis
 from fastapi.testclient import TestClient
 from sqlmodel import Session, delete
 
@@ -40,3 +41,11 @@ def normal_user_token_headers(client: TestClient, db: Session) -> dict[str, str]
     return authentication_token_from_email(
         client=client, email=settings.EMAIL_TEST_USER, db=db
     )
+
+
+@pytest.fixture(scope="session")
+def redis_client() -> Generator[redis.Redis]:
+    assert settings.REDIS_URL, "REDIS_URL must be configured to run the tests"
+    client = redis.Redis.from_url(str(settings.REDIS_URL))
+    yield client
+    client.close()

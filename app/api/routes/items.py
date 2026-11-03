@@ -1,10 +1,11 @@
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Response
 from sqlmodel import col, func, select
 
-from app.api.deps import CurrentUser, SessionDep
+from app.api.deps import CacheDep, CurrentUser, SessionDep
+from app.core.cache import ITEMS_NAMESPACE, CacheStatus
 from app.models import Item, ItemCreate, ItemPublic, ItemsPublic, ItemUpdate, Message
 
 router = APIRouter(prefix="/items", tags=["items"])
@@ -12,11 +13,21 @@ router = APIRouter(prefix="/items", tags=["items"])
 
 @router.get("/", response_model=ItemsPublic)
 def read_items(
-    session: SessionDep, current_user: CurrentUser, skip: int = 0, limit: int = 100
+    session: SessionDep,
+    current_user: CurrentUser,
+    cache: CacheDep,
+    response: Response,
+    skip: int = 0,
+    limit: int = 100,
 ) -> Any:
     """
     Retrieve items.
     """
+    scope = "all" if current_user.is_superuser else str(current_user.id)
+    lookup = cache.lookup(ITEMS_NAMESPACE, "list", scope, str(skip), str(limit))
+    response.headers["X-Cache"] = lookup.status
+    if lookup.status is CacheStatus.HIT:
+        return ItemsPublic.model_validate(lookup.value)
 
     if current_user.is_superuser:
         count_statement = select(func.count()).select_from(Item)
@@ -42,17 +53,33 @@ def read_items(
         items = session.exec(statement).all()
 
     items_public = [ItemPublic.model_validate(item) for item in items]
-    return ItemsPublic(data=items_public, count=count)
+    result = ItemsPublic(data=items_public, count=count)
+    cache.store(lookup, result.model_dump(mode="json"))
+    return result
 
 
 @router.get("/{id}", response_model=ItemPublic)
-def read_item(session: SessionDep, current_user: CurrentUser, id: uuid.UUID) -> Any:
+def read_item(
+    session: SessionDep,
+    current_user: CurrentUser,
+    cache: CacheDep,
+    response: Response,
+    id: uuid.UUID,
+) -> Any:
     """
     Get item by ID.
     """
-    item = session.get(Item, id)
-    if not item:
-        raise HTTPException(status_code=404, detail="Item not found")
+    lookup = cache.lookup(ITEMS_NAMESPACE, "item", str(id))
+    response.headers["X-Cache"] = lookup.status
+    if lookup.status is CacheStatus.HIT:
+        item = ItemPublic.model_validate(lookup.value)
+    else:
+        db_item = session.get(Item, id)
+        if not db_item:
+            raise HTTPException(status_code=404, detail="Item not found")
+        item = ItemPublic.model_validate(db_item)
+        cache.store(lookup, item.model_dump(mode="json"))
+    # Permissions are always checked, also for cached items
     if not current_user.is_superuser and (item.owner_id != current_user.id):
         raise HTTPException(status_code=403, detail="Not enough permissions")
     return item

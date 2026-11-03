@@ -17,6 +17,7 @@ docker compose up -d --wait backend    # db + mailpit + migrations + API
 ```
 
 - API: <http://localhost:8000/api/v1> — docs: <http://localhost:8000/docs>
+- Redis (cache): `localhost:6379` — responses of `GET /items` include `X-Cache: HIT | MISS | BYPASS`
 - Mailpit: <http://localhost:8025> · Adminer (optional): `docker compose up -d adminer` → <http://localhost:8080>
 
 With `docker compose watch` the code in `app/` is synced into the container and reloaded.

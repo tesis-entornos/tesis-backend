@@ -17,6 +17,16 @@ services:
     ports:
       - "5432:5432"
 
+  redis:
+    image: redis:7.2-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    ports:
+      - "6379:6379"
+
   mailpit:
     image: axllent/mailpit:v1.27
     ports:
@@ -56,6 +66,9 @@ services:
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       EMAILS_FROM_EMAIL: ${EMAILS_FROM_EMAIL}
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:?Variable not set}@db:5432/app
+      REDIS_URL: redis://redis:6379/0
+      CACHE_TTL_SECONDS: ${CACHE_TTL_SECONDS:-60}
+      CACHE_KEY_PREFIX: ${CACHE_KEY_PREFIX:-tesis}
       SENTRY_DSN: ${SENTRY_DSN:-}
 
   backend:
@@ -65,6 +78,8 @@ services:
         condition: service_completed_successfully
       mailpit:
         condition: service_started
+      redis:
+        condition: service_healthy
     environment: *backend-env
     ports:
       - "8000:8000"

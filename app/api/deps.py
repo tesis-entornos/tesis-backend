@@ -9,6 +9,7 @@ from pydantic import ValidationError
 from sqlmodel import Session
 
 from app.core import security
+from app.core.cache import Cache, cache
 from app.core.config import settings
 from app.core.db import engine
 from app.models import TokenPayload, User
@@ -24,6 +25,13 @@ def get_db() -> Generator[Session]:
 
 
 SessionDep = Annotated[Session, Depends(get_db)]
+
+
+def get_cache() -> Cache:
+    return cache
+
+
+CacheDep = Annotated[Cache, Depends(get_cache)]
 TokenDep = Annotated[str, Depends(reusable_oauth2)]
 
 
