@@ -17,7 +17,7 @@ docker compose up -d --wait backend    # db + mailpit + migrations + API
 ```
 
 - API: <http://localhost:8000/api/v1> — docs: <http://localhost:8000/docs>
-- Redis (cache): `localhost:6379` — responses of `GET /items` include `X-Cache: HIT | MISS | BYPASS`
+- Redis (cache): `localhost:6379` — responses of `GET /items` include `X-App-Cache: HIT | MISS | BYPASS`
 - S3 emulator (moto): <http://localhost:5050>, bucket `tesis-files`, created by `s3-init`
 - Mailpit: <http://localhost:8025> · Adminer (optional): `docker compose up -d adminer` → <http://localhost:8080>
 

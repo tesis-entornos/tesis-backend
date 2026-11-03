@@ -22,9 +22,9 @@ def test_read_item_is_cached(
     second = client.get(f"{ITEMS_URL}/{item.id}", headers=superuser_token_headers)
 
     assert first.status_code == 200
-    assert first.headers["X-Cache"] == "MISS"
+    assert first.headers["X-App-Cache"] == "MISS"
     assert second.status_code == 200
-    assert second.headers["X-Cache"] == "HIT"
+    assert second.headers["X-App-Cache"] == "HIT"
     assert second.json() == first.json()
 
 
@@ -42,7 +42,7 @@ def test_update_item_invalidates_cache(
     assert response.status_code == 200
 
     after = client.get(f"{ITEMS_URL}/{item.id}", headers=superuser_token_headers)
-    assert after.headers["X-Cache"] == "MISS"
+    assert after.headers["X-App-Cache"] == "MISS"
     assert after.json()["title"] == "Updated title"
 
 
@@ -64,7 +64,7 @@ def test_create_item_invalidates_list(
 ) -> None:
     client.get(f"{ITEMS_URL}/", headers=superuser_token_headers)
     cached = client.get(f"{ITEMS_URL}/", headers=superuser_token_headers)
-    assert cached.headers["X-Cache"] == "HIT"
+    assert cached.headers["X-App-Cache"] == "HIT"
 
     created = client.post(
         f"{ITEMS_URL}/",
@@ -74,7 +74,7 @@ def test_create_item_invalidates_list(
     assert created.status_code == 200
 
     after = client.get(f"{ITEMS_URL}/", headers=superuser_token_headers)
-    assert after.headers["X-Cache"] == "MISS"
+    assert after.headers["X-App-Cache"] == "MISS"
     assert created.json()["id"] in [item["id"] for item in after.json()["data"]]
 
 
@@ -88,7 +88,7 @@ def test_cached_item_still_checks_permissions(
     item = create_random_item(db)
     client.get(f"{ITEMS_URL}/{item.id}", headers=superuser_token_headers)
     cached = client.get(f"{ITEMS_URL}/{item.id}", headers=superuser_token_headers)
-    assert cached.headers["X-Cache"] == "HIT"
+    assert cached.headers["X-App-Cache"] == "HIT"
 
     response = client.get(f"{ITEMS_URL}/{item.id}", headers=normal_user_token_headers)
     assert response.status_code == 403
@@ -126,9 +126,9 @@ def test_items_are_served_when_cache_is_unavailable(
 
     response = client.get(f"{ITEMS_URL}/{item.id}", headers=superuser_token_headers)
     assert response.status_code == 200
-    assert response.headers["X-Cache"] == "BYPASS"
+    assert response.headers["X-App-Cache"] == "BYPASS"
     assert response.json()["id"] == str(item.id)
 
     listing = client.get(f"{ITEMS_URL}/", headers=superuser_token_headers)
     assert listing.status_code == 200
-    assert listing.headers["X-Cache"] == "BYPASS"
+    assert listing.headers["X-App-Cache"] == "BYPASS"

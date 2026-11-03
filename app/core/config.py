@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     SENTRY_DSN: HttpUrl | None = None
     DATABASE_URL: PostgresDsn
 
-    # Cache (Redis). Without REDIS_URL the cache is disabled (X-Cache: BYPASS).
+    # Cache (Redis). Without REDIS_URL the cache is disabled (X-App-Cache: BYPASS).
     REDIS_URL: RedisDsn | None = None
     CACHE_TTL_SECONDS: int = 60
     # Namespace for every key, so several environments can share a cluster

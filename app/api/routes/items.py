@@ -25,7 +25,7 @@ def read_items(
     """
     scope = "all" if current_user.is_superuser else str(current_user.id)
     lookup = cache.lookup(ITEMS_NAMESPACE, "list", scope, str(skip), str(limit))
-    response.headers["X-Cache"] = lookup.status
+    response.headers["X-App-Cache"] = lookup.status
     if lookup.status is CacheStatus.HIT:
         return ItemsPublic.model_validate(lookup.value)
 
@@ -70,7 +70,7 @@ def read_item(
     Get item by ID.
     """
     lookup = cache.lookup(ITEMS_NAMESPACE, "item", str(id))
-    response.headers["X-Cache"] = lookup.status
+    response.headers["X-App-Cache"] = lookup.status
     if lookup.status is CacheStatus.HIT:
         item = ItemPublic.model_validate(lookup.value)
     else:
