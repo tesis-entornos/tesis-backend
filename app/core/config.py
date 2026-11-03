@@ -37,6 +37,17 @@ class Settings(BaseSettings):
     # Namespace for every key, so several environments can share a cluster
     CACHE_KEY_PREFIX: str = "tesis"
 
+    # File storage (S3). Without S3_BUCKET the /files endpoints answer 503.
+    # Credentials come from the default AWS chain (ECS task role in AWS).
+    S3_BUCKET: str | None = None
+    # Prefix for every object key, so several environments can share a bucket
+    S3_KEY_PREFIX: str = ""
+    AWS_REGION: str = "us-east-1"
+    # Only for local emulators (e.g. http://s3:5000); empty in AWS
+    S3_ENDPOINT_URL: str | None = None
+    S3_FORCE_PATH_STYLE: bool = False
+    MAX_UPLOAD_BYTES: int = 10 * 1024 * 1024
+
     @field_validator("DATABASE_URL", mode="before")
     @classmethod
     def _use_psycopg_driver(cls, value: str | PostgresDsn) -> str:

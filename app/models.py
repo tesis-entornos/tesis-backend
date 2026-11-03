@@ -53,6 +53,7 @@ class User(UserBase, table=True):
     hashed_password: str
     created_at: datetime | None = Field(default_factory=get_datetime_utc)
     items: list[Item] = Relationship(back_populates="owner", cascade_delete=True)
+    files: list[File] = Relationship(back_populates="owner", cascade_delete=True)
 
 
 # Properties to return via API, id is always required
@@ -102,6 +103,34 @@ class ItemPublic(ItemBase):
 
 class ItemsPublic(SQLModel):
     data: list[ItemPublic]
+    count: int
+
+
+# Metadata of a file stored in S3; the content lives in the bucket
+class File(SQLModel, table=True):
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    filename: str = Field(max_length=255)
+    content_type: str = Field(max_length=255)
+    size: int
+    s3_key: str = Field(max_length=1024, unique=True)
+    created_at: datetime | None = Field(default_factory=get_datetime_utc)
+    owner_id: uuid.UUID = Field(
+        foreign_key="user.id", nullable=False, ondelete="CASCADE", index=True
+    )
+    owner: User | None = Relationship(back_populates="files")
+
+
+class FilePublic(SQLModel):
+    id: uuid.UUID
+    filename: str
+    content_type: str
+    size: int
+    owner_id: uuid.UUID
+    created_at: datetime | None = None
+
+
+class FilesPublic(SQLModel):
+    data: list[FilePublic]
     count: int
 
 

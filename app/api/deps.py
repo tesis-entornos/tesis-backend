@@ -12,6 +12,7 @@ from app.core import security
 from app.core.cache import Cache, cache
 from app.core.config import settings
 from app.core.db import engine
+from app.core.storage import FileStorage, storage
 from app.models import TokenPayload, User
 
 reusable_oauth2 = OAuth2PasswordBearer(
@@ -32,6 +33,25 @@ def get_cache() -> Cache:
 
 
 CacheDep = Annotated[Cache, Depends(get_cache)]
+
+
+def get_storage() -> FileStorage:
+    if storage is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="File storage is not configured",
+        )
+    return storage
+
+
+StorageDep = Annotated[FileStorage, Depends(get_storage)]
+
+
+def get_optional_storage() -> FileStorage | None:
+    return storage
+
+
+OptionalStorageDep = Annotated[FileStorage | None, Depends(get_optional_storage)]
 TokenDep = Annotated[str, Depends(reusable_oauth2)]
 
 

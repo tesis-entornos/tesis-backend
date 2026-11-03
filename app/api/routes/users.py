@@ -7,12 +7,15 @@ from sqlmodel import col, delete, func, select
 from app import crud
 from app.api.deps import (
     CurrentUser,
+    OptionalStorageDep,
     SessionDep,
     get_current_active_superuser,
 )
 from app.core.config import settings
 from app.core.security import get_password_hash, verify_password
+from app.core.storage import FileStorage
 from app.models import (
+    File,
     Item,
     Message,
     UpdatePassword,
@@ -27,6 +30,17 @@ from app.models import (
 from app.utils import generate_new_account_email, send_email
 
 router = APIRouter(prefix="/users", tags=["users"])
+
+
+def _file_keys_of(session: SessionDep, user_id: uuid.UUID) -> list[str]:
+    return list(session.exec(select(File.s3_key).where(File.owner_id == user_id)).all())
+
+
+def _delete_objects(storage: FileStorage | None, keys: list[str]) -> None:
+    # After the commit: metadata never points to a deleted object. A failure
+    # here leaves orphan objects, which are logged by delete_many.
+    if storage is not None and keys:
+        storage.delete_many(keys)
 
 
 @router.get(
@@ -130,7 +144,9 @@ def read_user_me(current_user: CurrentUser) -> Any:
 
 
 @router.delete("/me", response_model=Message)
-def delete_user_me(session: SessionDep, current_user: CurrentUser) -> Any:
+def delete_user_me(
+    session: SessionDep, current_user: CurrentUser, storage: OptionalStorageDep
+) -> Any:
     """
     Delete own user.
     """
@@ -138,8 +154,10 @@ def delete_user_me(session: SessionDep, current_user: CurrentUser) -> Any:
         raise HTTPException(
             status_code=403, detail="Super users are not allowed to delete themselves"
         )
+    file_keys = _file_keys_of(session, current_user.id)
     session.delete(current_user)
     session.commit()
+    _delete_objects(storage, file_keys)
     return Message(message="User deleted successfully")
 
 
@@ -213,7 +231,10 @@ def update_user(
 
 @router.delete("/{user_id}", dependencies=[Depends(get_current_active_superuser)])
 def delete_user(
-    session: SessionDep, current_user: CurrentUser, user_id: uuid.UUID
+    session: SessionDep,
+    current_user: CurrentUser,
+    storage: OptionalStorageDep,
+    user_id: uuid.UUID,
 ) -> Message:
     """
     Delete a user.
@@ -225,8 +246,10 @@ def delete_user(
         raise HTTPException(
             status_code=403, detail="Super users are not allowed to delete themselves"
         )
+    file_keys = _file_keys_of(session, user_id)
     statement = delete(Item).where(col(Item.owner_id) == user_id)
     session.exec(statement)
     session.delete(user)
     session.commit()
+    _delete_objects(storage, file_keys)
     return Message(message="User deleted successfully")

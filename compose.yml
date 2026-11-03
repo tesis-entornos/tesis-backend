@@ -27,6 +27,30 @@ services:
     ports:
       - "6379:6379"
 
+  # S3 emulator (in memory: data is lost when the container stops)
+  s3:
+    image: motoserver/moto:5.2.5
+    ports:
+      # Host port 5050: 5000 is often taken on macOS (AirPlay Receiver)
+      - "5050:5000"
+
+  # Creates the bucket; in AWS the bucket is provisioned by infrastructure code
+  s3-init:
+    image: amazon/aws-cli:2.39.3
+    depends_on:
+      - s3
+    environment:
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_DEFAULT_REGION: us-east-1
+    entrypoint: ["sh", "-c"]
+    command:
+      - >-
+        for i in $$(seq 1 30); do
+        aws --endpoint-url http://s3:5000 s3api head-bucket --bucket ${S3_BUCKET:-tesis-files} 2>/dev/null && exit 0;
+        aws --endpoint-url http://s3:5000 s3api create-bucket --bucket ${S3_BUCKET:-tesis-files} && exit 0;
+        sleep 1; done; exit 1
+
   mailpit:
     image: axllent/mailpit:v1.27
     ports:
@@ -69,6 +93,14 @@ services:
       REDIS_URL: redis://redis:6379/0
       CACHE_TTL_SECONDS: ${CACHE_TTL_SECONDS:-60}
       CACHE_KEY_PREFIX: ${CACHE_KEY_PREFIX:-tesis}
+      S3_BUCKET: ${S3_BUCKET:-tesis-files}
+      S3_KEY_PREFIX: ${S3_KEY_PREFIX:-}
+      AWS_REGION: us-east-1
+      S3_ENDPOINT_URL: http://s3:5000
+      S3_FORCE_PATH_STYLE: "true"
+      # Fake credentials for the local emulator only
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
       SENTRY_DSN: ${SENTRY_DSN:-}
 
   backend:
@@ -80,6 +112,8 @@ services:
         condition: service_started
       redis:
         condition: service_healthy
+      s3-init:
+        condition: service_completed_successfully
     environment: *backend-env
     ports:
       - "8000:8000"
