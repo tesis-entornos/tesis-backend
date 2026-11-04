@@ -1,5 +1,6 @@
 import uuid
 from datetime import UTC, datetime
+from typing import Literal
 
 from pydantic import EmailStr
 from sqlmodel import Field, Relationship, SQLModel
@@ -137,6 +138,18 @@ class FilesPublic(SQLModel):
 # Generic message
 class Message(SQLModel):
     message: str
+
+
+# Readiness of the dependencies the application cannot work without.
+# Each check is "ok", "error" or "not_configured".
+class ReadinessChecks(SQLModel):
+    database: str
+    storage: str
+
+
+class Readiness(SQLModel):
+    status: Literal["ready", "not_ready"]
+    checks: ReadinessChecks
 
 
 # JSON payload containing access token

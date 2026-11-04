@@ -6,6 +6,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jwt.exceptions import InvalidTokenError
 from pydantic import ValidationError
+from sqlalchemy import Engine
 from sqlmodel import Session
 
 from app.core import security
@@ -18,6 +19,13 @@ from app.models import TokenPayload, User
 reusable_oauth2 = OAuth2PasswordBearer(
     tokenUrl=f"{settings.API_V1_STR}/login/access-token"
 )
+
+
+def get_engine() -> Engine:
+    return engine
+
+
+EngineDep = Annotated[Engine, Depends(get_engine)]
 
 
 def get_db() -> Generator[Session]:

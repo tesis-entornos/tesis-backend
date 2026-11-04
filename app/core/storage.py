@@ -70,6 +70,13 @@ class FileStorage:
         # User supplied file names are never part of the key
         return f"{self._key_prefix}files/{owner_id}/{file_id}"
 
+    def check_bucket(self) -> None:
+        """Raise StorageError unless the bucket exists and is reachable."""
+        try:
+            self._client.head_bucket(Bucket=self._bucket)
+        except (BotoCoreError, ClientError) as e:
+            raise StorageError(f"Bucket {self._bucket} is not reachable") from e
+
     def put(self, key: str, data: bytes, content_type: str) -> None:
         try:
             self._client.put_object(
