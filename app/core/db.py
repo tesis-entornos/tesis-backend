@@ -1,10 +1,23 @@
+from sqlalchemy import Engine
 from sqlmodel import Session, create_engine, select
 
 from app import crud
 from app.core.config import settings
 from app.models import User, UserCreate
 
-engine = create_engine(str(settings.DATABASE_URL), pool_pre_ping=True)
+
+def build_engine(url: str) -> Engine:
+    # pool_pre_ping checks every connection on checkout, so the pool recovers
+    # when the database is restarted or recreated (scripts/reset_baseline.py).
+    return create_engine(
+        url,
+        pool_pre_ping=True,
+        pool_size=settings.DB_POOL_SIZE,
+        max_overflow=settings.DB_MAX_OVERFLOW,
+    )
+
+
+engine = build_engine(str(settings.DATABASE_URL))
 
 
 # make sure all SQLModel models are imported (app.models) before initializing DB

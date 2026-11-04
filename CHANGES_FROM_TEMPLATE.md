@@ -54,6 +54,12 @@ Declared change of the reference application: endpoints to upload, list, downloa
 |---|--------|--------|
 | T1 | `tests/conftest.py` + new `tests/utils/cleanup.py`: upstream's session fixture deleted **all** items and users at the end of the run (and S8 extended it to all file objects). Now a SQLAlchemy `after_flush` listener records the ids of every `User`, `Item` and `File` inserted during the run (by the app through `TestClient` or by test helpers), and the final cleanup deletes only those: S3 objects first, then file rows, items and users. Verified by seeding a user with an item and a file plus a superuser item, running the suite twice, and checking that counts and seeded rows/objects were unchanged. | Running Pytest against a database that holds other data (e.g. a shared, fixed environment) must not destroy that data, and the suite must not depend on an empty database. Known remaining effects on pre-existing data: the superuser password is changed and restored by `test_update_password_me`, and if `EMAIL_TEST_USER` already exists its password is reset by the `normal_user_token_headers` fixture (both are upstream behavior). |
 
+## Deployment readiness (stage 4)
+
+| # | Change | Reason |
+|---|--------|--------|
+| D1 | Settings `DB_POOL_SIZE` (3) and `DB_MAX_OVERFLOW` (2) passed to the engine (`app/core/db.py`, `build_engine`), which keeps `pool_pre_ping=True`. New `scripts/start.sh` (image `CMD`) runs `fastapi run --workers "${WEB_CONCURRENCY:-2}"` instead of a fixed `--workers 4`. Compose and `.env.example` expose the three values. Tests `tests/core/test_db.py`: the pool uses the configured sizes, and a pooled connection terminated by the server (`pg_terminate_backend`) is replaced on the next checkout. | Upstream opened up to 4 × (5 + 10) = 60 connections per task. RDS is shared by several environments, so connections per task (workers × (pool + overflow)) must be sized per environment; the defaults give 10. Pre-ping lets the pool survive a database restart or recreation. |
+
 ## Removed from upstream (not copied)
 
 | Path | Reason |

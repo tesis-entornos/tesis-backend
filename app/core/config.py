@@ -3,6 +3,7 @@ from typing import Literal, Self
 
 from pydantic import (
     EmailStr,
+    Field,
     HttpUrl,
     PostgresDsn,
     RedisDsn,
@@ -30,6 +31,10 @@ class Settings(BaseSettings):
     PROJECT_NAME: str
     SENTRY_DSN: HttpUrl | None = None
     DATABASE_URL: PostgresDsn
+    # Connections per process. Total per task = workers * (pool size + overflow),
+    # so it can be sized for a database server shared by several environments.
+    DB_POOL_SIZE: int = Field(default=3, ge=1)
+    DB_MAX_OVERFLOW: int = Field(default=2, ge=0)
 
     # Cache (Redis). Without REDIS_URL the cache is disabled (X-App-Cache: BYPASS).
     REDIS_URL: RedisDsn | None = None

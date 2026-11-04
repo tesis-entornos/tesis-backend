@@ -38,4 +38,4 @@ COPY ./app /app/app
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen
 
-CMD ["fastapi", "run", "--workers", "4"]
+CMD ["bash", "scripts/start.sh"]
