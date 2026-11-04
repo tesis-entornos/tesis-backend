@@ -39,6 +39,20 @@ The coverage report is written to `htmlcov/`.
 
 `openapi.json` is versioned. After changing the API, export it, commit it, and regenerate the client in `tesis-frontend`.
 
-## Image
+## Images
 
-`docker build -t tesis-backend:local .` — the same image is used by the frontend E2E tests (`BACKEND_IMAGE`).
+The `Dockerfile` has two targets:
+
+- `runtime` (default): deployable image, without development dependencies, running as an
+  unprivileged user (uid 10001). `CMD` is `scripts/start.sh` (`WEB_CONCURRENCY` workers, default 2).
+  Migrations and initial data: `bash scripts/prestart.sh` (one-off task before the service update).
+
+  ```bash
+  docker build -t tesis-backend:local .   # used by the frontend E2E tests (BACKEND_IMAGE)
+  ```
+
+- `test`: runtime dependencies plus development dependencies and `tests/`, for Pytest.
+  The local compose stack (`docker compose up`, `scripts/run-tests.sh`) runs this target
+  (`BACKEND_TEST_IMAGE`, default `tesis-backend:test`).
+
+Base images (and the images in `compose.yml`) are pinned by digest.

@@ -1,8 +1,11 @@
 # Local development stack for the backend (not used for deployments).
+# The API runs from the `test` target (runtime + development dependencies + tests),
+# so Pytest can run inside it. The deployable image is the default `runtime` target.
+# Images are pinned by digest (multi-arch index); the tag is kept for readability.
 services:
 
   db:
-    image: postgres:18
+    image: postgres:18@sha256:3a4264520e121176619f54ff867d12774bc81e95e7b84db58d63bccdb6144b81
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d app"]
       interval: 10s
@@ -18,7 +21,7 @@ services:
       - "5432:5432"
 
   redis:
-    image: redis:7.2-alpine
+    image: redis:7.2-alpine@sha256:2c933526722b4126a61d5c170f766dc159adf97682f0b1cbbc27b1666ba96d84
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -29,14 +32,14 @@ services:
 
   # S3 emulator (in memory: data is lost when the container stops)
   s3:
-    image: motoserver/moto:5.2.5
+    image: motoserver/moto:5.2.5@sha256:59a1965d845249b04def37a0e2565f9cc6c44543cb89b68e90f28f344b3b0d1a
     ports:
       # Host port 5050: 5000 is often taken on macOS (AirPlay Receiver)
       - "5050:5000"
 
   # Creates the bucket; in AWS the bucket is provisioned by infrastructure code
   s3-init:
-    image: amazon/aws-cli:2.39.3
+    image: amazon/aws-cli:2.39.3@sha256:d557b3524475d70dd3104cf44d96568ee3188897b73a6ece2b37aa50e1af362f
     depends_on:
       - s3
     environment:
@@ -52,13 +55,13 @@ services:
         sleep 1; done; exit 1
 
   mailpit:
-    image: axllent/mailpit:v1.27
+    image: axllent/mailpit:v1.27@sha256:e22dce5b36f93c77082e204a3942fb6b283b7896e057458400a4c88344c3df68
     ports:
       - "8025:8025"
       - "1025:1025"
 
   adminer:
-    image: adminer
+    image: adminer:5.4.1@sha256:a3167350c4eb9ae4473b8ea0f49c8e5ae74c87b240ee2f6086521dba2a6bf243
     depends_on:
       - db
     environment:
@@ -68,9 +71,10 @@ services:
 
   # Runs migrations and creates initial data, then exits
   prestart:
-    image: ${BACKEND_IMAGE:-tesis-backend:local}
+    image: ${BACKEND_TEST_IMAGE:-tesis-backend:test}
     build:
       context: .
+      target: test
     depends_on:
       db:
         condition: service_healthy
@@ -107,7 +111,7 @@ services:
       SENTRY_DSN: ${SENTRY_DSN:-}
 
   backend:
-    image: ${BACKEND_IMAGE:-tesis-backend:local}
+    image: ${BACKEND_TEST_IMAGE:-tesis-backend:test}
     depends_on:
       prestart:
         condition: service_completed_successfully
