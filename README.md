@@ -44,8 +44,9 @@ docker run --rm --network <network> <app env vars> -e RESET_CONFIRM=<database na
 It drops and recreates the configured database (`DROP DATABASE ... WITH (FORCE)`), applies the
 migrations and the initial data, empties the bucket (including versions) under `S3_KEY_PREFIX`,
 and deletes only the `<CACHE_KEY_PREFIX>:*` keys (SCAN + UNLINK). It prints a JSON report and
-exits 0 only if it verifies 1 user, 0 items, 0 files, 0 cache keys and 0 objects; 2 if
-`RESET_CONFIRM` does not match the database name. The database user must own the database and
+exits 0 only if it verifies 1 user, 0 items, 0 files, 0 cache keys and 0 objects; 1 if a step
+or the verification fails; 2 if `RESET_CONFIRM` does not match the database name; 3 if `REDIS_URL`,
+`CACHE_KEY_PREFIX` or `S3_BUCKET` is missing (both checks run before anything is changed). The database user must own the database and
 have `CREATEDB`; the statements run on `RESET_MAINTENANCE_DB` (default `postgres`).
 
 ## OpenAPI contract

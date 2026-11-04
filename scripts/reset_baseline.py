@@ -22,9 +22,10 @@ Steps:
 4. Verification: 1 user (the superuser), 0 items, 0 files, 0 cache keys and
    0 objects. A JSON report is printed to stdout.
 
-Exit codes: 0 baseline verified, 1 verification or step failed,
-2 refused (RESET_CONFIRM does not match the database name).
-Redis or S3 not configured: the step is skipped and reported as such.
+Exit codes: 0 baseline verified; 1 a step or the verification failed;
+2 refused (RESET_CONFIRM does not match the database name); 3 missing
+configuration (REDIS_URL, CACHE_KEY_PREFIX and S3_BUCKET are required).
+Confirmation and configuration are checked before anything is changed.
 """
 
 import json
@@ -55,6 +56,7 @@ logger = logging.getLogger("reset_baseline")
 ROOT = Path(__file__).resolve().parents[1]
 EXIT_FAILED = 1
 EXIT_REFUSED = 2
+EXIT_CONFIG = 3
 _DELETE_BATCH = 1000
 _SCAN_COUNT = 1000
 
@@ -209,64 +211,75 @@ def count_objects(client: S3Client, bucket: str, prefix: str) -> int:
 # --- Main -----------------------------------------------------------------
 
 
+def missing_configuration() -> list[str]:
+    """Settings the reset cannot run without (checked before any change)."""
+    missing = []
+    if not settings.REDIS_URL:
+        missing.append("REDIS_URL")
+    if not settings.CACHE_KEY_PREFIX:
+        missing.append("CACHE_KEY_PREFIX")
+    if not settings.S3_BUCKET:
+        missing.append("S3_BUCKET")
+    return missing
+
+
+def open_s3() -> S3Client:
+    return build_s3_client(
+        region=settings.AWS_REGION,
+        endpoint_url=settings.S3_ENDPOINT_URL,
+        force_path_style=settings.S3_FORCE_PATH_STYLE,
+    )
+
+
+def open_cache() -> redis.Redis:
+    return redis.Redis.from_url(str(settings.REDIS_URL))
+
+
+EXPECTED_BASELINE: dict[str, Any] = {
+    "users": 1,
+    "superuser_present": True,
+    "items": 0,
+    "files": 0,
+    "cache_keys": 0,
+    "s3_objects": 0,
+}
+
+
 def run() -> tuple[int, dict[str, Any]]:
     db_name = database_name()
-    report: dict[str, Any] = {"database": db_name}
+    report: dict[str, Any] = {"database": db_name, "baseline_ok": False}
     if not check_confirmation(db_name, os.environ.get("RESET_CONFIRM")):
         report["error"] = (
             f"refused: RESET_CONFIRM must be exactly the database name ({db_name!r})"
         )
         return EXIT_REFUSED, report
+    missing = missing_configuration()
+    if missing:
+        report["error"] = f"missing configuration: {', '.join(missing)}"
+        return EXIT_CONFIG, report
+    bucket = settings.S3_BUCKET or ""
+    prefix = settings.CACHE_KEY_PREFIX or ""
 
     recreate_database(db_name, os.environ.get("RESET_MAINTENANCE_DB", "postgres"))
     migrate_and_seed()
 
-    s3: S3Client | None = None
-    if settings.S3_BUCKET:
-        s3 = build_s3_client(
-            region=settings.AWS_REGION,
-            endpoint_url=settings.S3_ENDPOINT_URL,
-            force_path_style=settings.S3_FORCE_PATH_STYLE,
-        )
-        logger.info(
-            "Emptying bucket %s (prefix %r)", settings.S3_BUCKET, settings.S3_KEY_PREFIX
-        )
-        report["s3_deleted"] = empty_bucket(
-            s3, settings.S3_BUCKET, settings.S3_KEY_PREFIX
-        )
+    s3 = open_s3()
+    logger.info("Emptying bucket %s (prefix %r)", bucket, settings.S3_KEY_PREFIX)
+    report["s3_deleted"] = empty_bucket(s3, bucket, settings.S3_KEY_PREFIX)
 
-    cache: redis.Redis | None = None
-    if settings.REDIS_URL:
-        assert settings.CACHE_KEY_PREFIX  # enforced by Settings
-        cache = redis.Redis.from_url(str(settings.REDIS_URL))
-        logger.info("Deleting cache keys %s", cache_pattern(settings.CACHE_KEY_PREFIX))
-        report["cache_deleted"] = delete_cache_keys(cache, settings.CACHE_KEY_PREFIX)
+    cache = open_cache()
+    logger.info("Deleting cache keys %s", cache_pattern(prefix))
+    report["cache_deleted"] = delete_cache_keys(cache, prefix)
 
     counts = database_counts()
-    counts["cache_keys"] = (
-        count_cache_keys(cache, settings.CACHE_KEY_PREFIX or "")
-        if cache is not None
-        else "not_configured"
-    )
-    counts["s3_objects"] = (
-        count_objects(s3, settings.S3_BUCKET or "", settings.S3_KEY_PREFIX)
-        if s3 is not None
-        else "not_configured"
-    )
+    counts["cache_keys"] = count_cache_keys(cache, prefix)
+    counts["s3_objects"] = count_objects(s3, bucket, settings.S3_KEY_PREFIX)
     report["counts"] = counts
 
-    expected: dict[str, Any] = {
-        "users": 1,
-        "superuser_present": True,
-        "items": 0,
-        "files": 0,
-        "cache_keys": 0 if cache is not None else "not_configured",
-        "s3_objects": 0 if s3 is not None else "not_configured",
-    }
     mismatches = {
-        k: {"expected": v, "actual": counts[k]}
-        for k, v in expected.items()
-        if counts[k] != v
+        k: {"expected": v, "actual": counts.get(k)}
+        for k, v in EXPECTED_BASELINE.items()
+        if counts.get(k) != v
     }
     report["baseline_ok"] = not mismatches
     if mismatches:
@@ -281,7 +294,8 @@ def main() -> int:
         code, report = run()
     except Exception as e:  # report every failure with a non-zero exit code
         logger.exception("Baseline reset failed")
-        code, report = EXIT_FAILED, {"error": f"{type(e).__name__}: {e}"}
+        code = EXIT_FAILED
+        report = {"baseline_ok": False, "error": f"{type(e).__name__}: {e}"}
     sys.stdout.write(json.dumps(report, indent=2, sort_keys=True) + "\n")
     return code
 
