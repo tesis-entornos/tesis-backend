@@ -39,6 +39,24 @@ class StoredObject:
     content_length: int
 
 
+def build_s3_client(
+    *,
+    region: str,
+    endpoint_url: str | None,
+    force_path_style: bool,
+    max_attempts: int = 3,
+) -> S3Client:
+    # Credentials come from the default AWS chain (ECS task role in AWS)
+    config = Config(
+        region_name=region,
+        connect_timeout=2,
+        read_timeout=10,
+        retries={"max_attempts": max_attempts, "mode": "standard"},
+        s3={"addressing_style": "path" if force_path_style else "auto"},
+    )
+    return boto3.client("s3", endpoint_url=endpoint_url or None, config=config)
+
+
 class FileStorage:
     def __init__(self, client: S3Client, *, bucket: str, key_prefix: str) -> None:
         self._client = client
@@ -56,14 +74,12 @@ class FileStorage:
         force_path_style: bool,
         max_attempts: int = 3,
     ) -> FileStorage:
-        config = Config(
-            region_name=region,
-            connect_timeout=2,
-            read_timeout=10,
-            retries={"max_attempts": max_attempts, "mode": "standard"},
-            s3={"addressing_style": "path" if force_path_style else "auto"},
+        client = build_s3_client(
+            region=region,
+            endpoint_url=endpoint_url,
+            force_path_style=force_path_style,
+            max_attempts=max_attempts,
         )
-        client = boto3.client("s3", endpoint_url=endpoint_url or None, config=config)
         return cls(client, bucket=bucket, key_prefix=key_prefix)
 
     def key_for(self, *, owner_id: str, file_id: str) -> str:

@@ -31,6 +31,23 @@ With `docker compose watch` the code in `app/` is synced into the container and 
 
 The coverage report is written to `htmlcov/`.
 
+## Baseline reset
+
+`scripts/reset_baseline.py` restores an environment to its baseline. It runs with the deployable
+image and the application's environment variables, locally or as a one-off ECS task:
+
+```bash
+docker run --rm --network <network> <app env vars> -e RESET_CONFIRM=<database name> \
+  tesis-backend:local python scripts/reset_baseline.py
+```
+
+It drops and recreates the configured database (`DROP DATABASE ... WITH (FORCE)`), applies the
+migrations and the initial data, empties the bucket (including versions) under `S3_KEY_PREFIX`,
+and deletes only the `<CACHE_KEY_PREFIX>:*` keys (SCAN + UNLINK). It prints a JSON report and
+exits 0 only if it verifies 1 user, 0 items, 0 files, 0 cache keys and 0 objects; 2 if
+`RESET_CONFIRM` does not match the database name. The database user must own the database and
+have `CREATEDB`; the statements run on `RESET_MAINTENANCE_DB` (default `postgres`).
+
 ## OpenAPI contract
 
 ```bash
