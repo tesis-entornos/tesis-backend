@@ -95,7 +95,7 @@ services:
       DB_MAX_OVERFLOW: ${DB_MAX_OVERFLOW:-2}
       REDIS_URL: redis://redis:6379/0
       CACHE_TTL_SECONDS: ${CACHE_TTL_SECONDS:-60}
-      CACHE_KEY_PREFIX: ${CACHE_KEY_PREFIX:-tesis}
+      CACHE_KEY_PREFIX: ${CACHE_KEY_PREFIX:?Variable not set}
       S3_BUCKET: ${S3_BUCKET:-tesis-files}
       S3_KEY_PREFIX: ${S3_KEY_PREFIX:-}
       AWS_REGION: us-east-1

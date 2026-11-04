@@ -39,8 +39,9 @@ class Settings(BaseSettings):
     # Cache (Redis). Without REDIS_URL the cache is disabled (X-App-Cache: BYPASS).
     REDIS_URL: RedisDsn | None = None
     CACHE_TTL_SECONDS: int = 60
-    # Namespace for every key, so several environments can share a cluster
-    CACHE_KEY_PREFIX: str = "tesis"
+    # Namespace for every key, so several environments can share a cluster.
+    # No default: required when REDIS_URL is set (unique per environment).
+    CACHE_KEY_PREFIX: str | None = None
 
     # File storage (S3). Without S3_BUCKET the /files endpoints answer 503.
     # Credentials come from the default AWS chain (ECS task role in AWS).
@@ -52,6 +53,15 @@ class Settings(BaseSettings):
     S3_ENDPOINT_URL: str | None = None
     S3_FORCE_PATH_STYLE: bool = False
     MAX_UPLOAD_BYTES: int = 10 * 1024 * 1024
+
+    @model_validator(mode="after")
+    def _require_cache_key_prefix(self) -> Self:
+        if self.REDIS_URL and not self.CACHE_KEY_PREFIX:
+            raise ValueError(
+                "CACHE_KEY_PREFIX is required when REDIS_URL is set "
+                "(use a value unique to the environment)"
+            )
+        return self
 
     @field_validator("DATABASE_URL", mode="before")
     @classmethod

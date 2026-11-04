@@ -101,6 +101,7 @@ class Cache:
 
 cache = Cache.from_url(
     str(settings.REDIS_URL) if settings.REDIS_URL else None,
-    prefix=settings.CACHE_KEY_PREFIX,
+    # Only None when REDIS_URL is not set (enforced by Settings)
+    prefix=settings.CACHE_KEY_PREFIX or "",
     ttl_seconds=settings.CACHE_TTL_SECONDS,
 )
