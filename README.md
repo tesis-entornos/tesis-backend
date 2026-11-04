@@ -73,4 +73,4 @@ The `Dockerfile` has two targets:
   The local compose stack (`docker compose up`, `scripts/run-tests.sh`) runs this target
   (`BACKEND_TEST_IMAGE`, default `tesis-backend:test`).
 
-Base images (and the images in `compose.yml`) are pinned by digest.
+Base images (`python:3.14-slim`, uv, and the images in `compose.yml`) are pinned by digest.
